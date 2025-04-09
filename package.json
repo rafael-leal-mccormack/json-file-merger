@@ -1,6 +1,6 @@
 {
   "name": "json-file-merger",
-  "version": "1.0.4",
+  "version": "1.0.7",
   "description": "A Node.js package for merging large JSON files using streams",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -13,8 +13,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "test": "node test/test.js",
-    "test:interruption": "node test/test-interruption.js",
+    "test": "npm run build && node test/test.js",
+    "test:interruption": "npm run build && node test/test-interruption.js",
     "clean": "rm -rf dist test-files merged-output.json",
     "prepublishOnly": "npm run build"
   },
@@ -37,7 +37,8 @@
   "homepage": "https://github.com/rafael-leal-mccormack/json-file-merger#readme",
   "dependencies": {
     "commander": "^11.1.0",
-    "glob": "^10.3.10"
+    "glob": "^10.3.10",
+    "ora": "^8.1.2"
   },
   "devDependencies": {
     "@types/node": "^20.11.24",

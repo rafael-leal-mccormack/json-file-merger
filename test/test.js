@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { mergeJsonFiles, formatBytes } = require('../dist/index');
-const { getJsonFilesFromDirectory } = require('../src/utils/file-utils');
+const { mergeJsonFiles, formatBytes, getJsonFilesFromDirectory } = require('../dist/index');
 const generateTestData = require('./generate-test-data');
 const generateTestData2 = require('./generate-test-data-2');
 const generateTestData3 = require('./generate-test-data-3');

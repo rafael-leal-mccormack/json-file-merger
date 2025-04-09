@@ -37,6 +37,20 @@ async function main() {
   createTestFile(additionalDir, 'extra1.json');
   createTestFile(additionalDir, 'extra2.json');
 
+  // Debug: Verify directory structure
+  console.log('\nVerifying directory structure...');
+  console.log('Test directory:', testDir);
+  console.log('JSON directory:', jsonDir);
+  console.log('Additional directory:', additionalDir);
+  
+  console.log('\nContents of json-files directory:');
+  const jsonFiles = fs.readdirSync(jsonDir);
+  console.log(jsonFiles);
+
+  console.log('\nContents of additional directory:');
+  const additionalFiles = fs.readdirSync(additionalDir);
+  console.log(additionalFiles);
+
   // Test 1: Merge specific files
   console.log('\nTest 1: Merge specific files');
   const output1 = path.join(testDir, 'merged-1.json');
@@ -79,8 +93,8 @@ async function main() {
   // Test 3: Merge all JSON files from a directory
   console.log('\nTest 3: Merge all JSON files from a directory');
   const output3 = path.join(testDir, 'merged-3.json');
-  const jsonFiles = await getJsonFilesFromDirectory(jsonDir);
-  await mergeJsonFiles(jsonFiles, output3, {
+  const jsonFilesFromDir = await getJsonFilesFromDirectory(jsonDir);
+  await mergeJsonFiles(jsonFilesFromDir, output3, {
     onProgress: (progressInfo) => {
       process.stdout.write(
         `\rProgress: ${progressInfo.progress.toFixed(1)}% ` +
@@ -96,7 +110,7 @@ async function main() {
   console.log('\nTest 4: Combine directory and specific files');
   const output4 = path.join(testDir, 'merged-4.json');
   const allFiles = [
-    ...jsonFiles,
+    ...jsonFilesFromDir,
     ...(await expandGlobPatterns([path.join(additionalDir, '*.json')]))
   ];
   await mergeJsonFiles(allFiles, output4, {
@@ -119,7 +133,7 @@ async function main() {
     console.log('✓ Basic CLI command successful');
 
     // Test directory command
-    execSync(`npx json-file-merger ${path.join(testDir, 'cli-2.json')} --directory ${jsonDir}`);
+    execSync(`npx json-file-merger ${path.join(testDir, 'cli-2.json')} --dir ${jsonDir}`);
     console.log('✓ Directory CLI command successful');
 
     // Test wildcard command
@@ -127,11 +141,11 @@ async function main() {
     console.log('✓ Wildcard CLI command successful');
 
     // Test combined command
-    execSync(`npx json-file-merger ${path.join(testDir, 'cli-4.json')} --directory ${jsonDir} "${path.join(additionalDir, '*.json')}"`);
+    execSync(`npx json-file-merger ${path.join(testDir, 'cli-4.json')} --dir ${jsonDir} "${path.join(additionalDir, '*.json')}"`);
     console.log('✓ Combined CLI command successful');
 
     // Test silent mode
-    execSync(`npx json-file-merger -s ${path.join(testDir, 'cli-5.json')} --directory ${jsonDir}`);
+    execSync(`npx json-file-merger -s ${path.join(testDir, 'cli-5.json')} --dir ${jsonDir}`);
     console.log('✓ Silent mode CLI command successful');
   } catch (error) {
     console.error('CLI test failed:', error.message);

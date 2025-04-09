@@ -11,6 +11,8 @@ A Node.js package for merging large JSON files using streams, designed to handle
 - Command-line interface for easy use
 - Support for merging all JSON files from a directory
 - Wildcard pattern support for flexible file selection
+- Progress tracking with speed metrics and buffer information
+- Silent mode for automated scripts
 
 ## Installation
 
@@ -25,16 +27,46 @@ npm install json-file-merger
 ```javascript
 const { mergeJsonFiles } = require('json-file-merger');
 
-// Example usage
+// Example 1: Basic file merging with progress tracking
 async function example() {
   try {
     await mergeJsonFiles(
       ['file1.json', 'file2.json', 'file3.json'],
-      'merged-output.json'
+      'merged-output.json',
+      {
+        onProgress: (progressInfo) => {
+          console.log(
+            `Progress: ${progressInfo.progress.toFixed(1)}% ` +
+            `(${progressInfo.processedBytes} bytes processed) ` +
+            `[${progressInfo.speed.toFixed(1)} MB/s]`
+          );
+        }
+      }
     );
     console.log('Files merged successfully!');
   } catch (error) {
     console.error('Error merging files:', error);
+  }
+}
+
+// Example 2: Using directory and pattern matching
+const { getJsonFilesFromDirectory, expandGlobPatterns } = require('json-file-merger');
+
+async function advancedExample() {
+  try {
+    // Get all JSON files from a directory
+    const filesFromDir = await getJsonFilesFromDirectory('./json-files');
+    
+    // Combine with files matching a pattern
+    const additionalFiles = await expandGlobPatterns(['additional/*.json']);
+    
+    // Merge all files
+    await mergeJsonFiles(
+      [...filesFromDir, ...additionalFiles],
+      'combined-output.json'
+    );
+  } catch (error) {
+    console.error('Error:', error);
   }
 }
 ```
@@ -44,40 +76,27 @@ async function example() {
 After installation, you can use the package from the command line:
 
 ```bash
-# Merge specific files
+# Basic usage - merge specific files
 json-file-merger output.json input1.json input2.json input3.json
+
+# Merge files from a directory
+json-file-merger output.json --dir ./json-files
 
 # Merge files using wildcards
 json-file-merger output.json "data/*.json"
-json-file-merger output.json "**/*.json"  # Recursive search
-json-file-merger output.json "data-*.json" # Pattern matching
+json-file-merger output.json "data-*.json"
 
-# Merge all JSON files from a directory
-json-file-merger output.json --directory ./json-files
+# Combine directory files with additional patterns
+json-file-merger output.json --dir ./json-files "additional/*.json"
 
-# Combine directory and specific files with wildcards
-json-file-merger output.json --directory ./json-files "additional/*.json"
-
-# Suppress console output
-json-file-merger -s output.json --directory ./json-files
+# Silent mode (suppress progress output)
+json-file-merger -s output.json --dir ./json-files
 
 # Show help
 json-file-merger --help
 ```
 
-## Features
-
-### Directory Support
-The `--directory` option allows you to merge all JSON files from a specified directory. This is useful when you have multiple JSON files that need to be combined. The output file will be written to the current working directory, and if it's in the same directory as the input files, it will be automatically excluded from the merge process.
-
-### Wildcard Support
-The package supports glob patterns for flexible file selection. You can use patterns like:
-- `*.json` - Match all JSON files in the current directory
-- `**/*.json` - Match all JSON files in the current directory and subdirectories
-- `data-*.json` - Match all JSON files starting with "data-"
-- `data/*.json` - Match all JSON files in the data directory
-
-## API
+## API Reference
 
 ### `mergeJsonFiles(inputFiles, outputFile, options)`
 
@@ -94,61 +113,60 @@ Merges multiple JSON files into a single JSON array.
       progress: number,        // Progress percentage (0-100)
       processedBytes: number,  // Number of bytes processed
       speed: number,          // Processing speed in MB/s
-      buffer: {               // Buffer information
-        size: number,         // Current buffer size
-        maxSize: number       // Maximum buffer size reached
+      bufferInfo: {           // Buffer information
+        bufferSize: number    // Current buffer size
       }
     }
     ```
 
+### `getJsonFilesFromDirectory(directory, pattern = '*.json')`
+
+Retrieves all JSON files from a specified directory.
+
+#### Parameters
+
+- `directory` (string): Path to the directory containing JSON files
+- `pattern` (string): Optional glob pattern for file matching (default: '*.json')
+
 #### Returns
 
-- Promise<void>: Resolves when all files are merged
+- Promise<string[]>: Array of file paths
 
-#### Throws
+### `expandGlobPatterns(patterns)`
 
-- Error: If input files array is empty or invalid
+Expands glob patterns to match JSON files.
 
-## Project Structure
+#### Parameters
 
-The project follows a modular structure for better maintainability:
+- `patterns` (string[]): Array of glob patterns
 
-```
-src/
-├── index.js           # Main entry point
-├── streams/           # Stream-related implementations
-│   └── json-stream-merger.js
-├── utils/            # Utility functions
-│   └── file-utils.js
-└── types/            # Type definitions
-    └── index.js
-```
+#### Returns
+
+- Promise<string[]>: Array of matched file paths
 
 ## Testing
 
-To run the tests, clone the repository and run:
+The package includes comprehensive tests covering:
 
-```bash
-# Run the main test suite
-node test/test.js
-
-# Run the interruption test
-node test/test-interruption.js
+```javascript
+// Test scenarios from test-publish.js
+- Merging specific files
+- Merging using wildcards (e.g., "data-*.json")
+- Merging all JSON files from a directory
+- Combining directory files with additional files
+- Command line interface operations:
+  - Basic file merging
+  - Directory-based merging
+  - Wildcard pattern matching
+  - Combined operations
+  - Silent mode
 ```
 
-Tests cover:
-- Basic file merging
-- Large file handling
-- Progress reporting
-- Interruption handling
-- Error cases
+To run the tests:
 
-The test suite will:
-- Generate test files of various sizes
-- Test merging of JSON files
-- Verify the output file structure and content
-- Test memory efficiency and streaming performance
-- Clean up test files after completion
+```bash
+npm test
+```
 
 ## Performance
 
@@ -157,7 +175,7 @@ The package is designed for high-performance merging of large JSON files:
 - Dynamic chunk sizing based on total file size
 - Memory-efficient object handling
 - Progress tracking with speed metrics
-- Typical processing speeds of 600+ MB/s
+- Typical processing speeds of 100+ MB/s
 
 ## License
 

@@ -1,7 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { mergeJsonFiles, formatBytes } = require('../dist/index');
-const { getJsonFilesFromDirectory } = require('../src/utils/file-utils');
+const { mergeJsonFiles, formatBytes, getJsonFilesFromDirectory } = require('../dist/index');
 
 module.exports = async function testInterruption() {
   const testDir = path.join(__dirname, 'data');
