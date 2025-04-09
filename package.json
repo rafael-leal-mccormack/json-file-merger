@@ -1,6 +1,6 @@
 {
   "name": "json-file-merger",
-  "version": "1.0.7",
+  "version": "1.0.8",
   "description": "A Node.js package for merging large JSON files using streams",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
