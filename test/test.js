@@ -16,7 +16,7 @@ async function verifyOutputFile(filePath) {
     // Read the first chunk to get the first object
     const firstChunkStream = fs.createReadStream(filePath, {
       start: 0,
-      end: 2000, // Increased size to ensure we get a complete object
+      end: 2000,
       encoding: 'utf8'
     });
 
@@ -51,7 +51,7 @@ async function verifyOutputFile(filePath) {
         const firstObject = JSON.parse(firstObjectStr);
 
         // Now read the last chunk to get the last object
-        const lastChunkSize = 200 * 1024; // Increased to 200KB
+        const lastChunkSize = 200 * 1024; // 200KB
         const lastChunkStart = Math.max(0, stats.size - lastChunkSize);
         const lastChunkStream = fs.createReadStream(filePath, {
           start: lastChunkStart,
@@ -90,10 +90,35 @@ async function verifyOutputFile(filePath) {
             const lastObjectStr = lastChunkStr.substring(start, pos + 1);
             const lastObject = JSON.parse(lastObjectStr);
 
-            // Count objects in the last chunk (rough estimate)
-            const objectCount = (lastChunkStr.match(/\{/g) || []).length;
+            // Count total objects by reading the file in chunks
+            const readStream = fs.createReadStream(filePath, {
+              encoding: 'utf8',
+              highWaterMark: 1024 * 1024 // 1MB chunks
+            });
 
-            resolve({ count: objectCount, firstObject, lastObject });
+            let objectCount = 0;
+            let buffer = '';
+
+            readStream.on('data', chunk => {
+              buffer += chunk;
+              // Count complete objects in the buffer
+              const matches = buffer.match(/\{/g);
+              if (matches) {
+                objectCount += matches.length;
+              }
+              // Keep only the last incomplete object in the buffer
+              const lastBrace = buffer.lastIndexOf('}');
+              if (lastBrace !== -1) {
+                buffer = buffer.substring(lastBrace + 1);
+              }
+            });
+
+            readStream.on('end', () => {
+              console.log(`Output file contains ${objectCount.toLocaleString()} objects`);
+              resolve({ count: objectCount, firstObject, lastObject });
+            });
+
+            readStream.on('error', reject);
           } catch (err) {
             reject(new Error('Failed to parse last object: ' + err.message));
           }
@@ -109,12 +134,69 @@ async function verifyOutputFile(filePath) {
   });
 }
 
-async function checkTestFile(filePath, minSize = 1024 * 1024) { // minSize = 1MB
+async function checkTestFile(filePath, sizeInMB = 2048) {
   try {
-    const stats = fs.statSync(filePath);
-    return stats.size >= minSize; // File exists and has minimum size
-  } catch (err) {
-    return false; // File doesn't exist or can't be accessed
+    if (fs.existsSync(filePath)) {
+      const stats = fs.statSync(filePath);
+      const currentSizeMB = stats.size / (1024 * 1024);
+      if (Math.abs(currentSizeMB - sizeInMB) < 1) {
+        console.log(`File ${filePath} already exists with correct size (${currentSizeMB.toFixed(2)} MB)`);
+        return true;
+      }
+      console.log(`File ${filePath} exists but wrong size (${currentSizeMB.toFixed(2)} MB), regenerating...`);
+      fs.unlinkSync(filePath);
+    }
+
+    console.log(`Generating test file: ${filePath} (${sizeInMB} MB)`);
+    const writeStream = fs.createWriteStream(filePath);
+    
+    // Write opening bracket
+    writeStream.write('[\n');
+
+    const objectSize = 1024; // 1KB per object
+    const numObjects = Math.ceil((sizeInMB * 1024 * 1024) / objectSize);
+    const batchSize = 1000; // Write in batches of 1000 objects
+
+    for (let i = 0; i < numObjects; i += batchSize) {
+      const batch = [];
+      const end = Math.min(i + batchSize, numObjects);
+      
+      for (let j = i; j < end; j++) {
+        const obj = {
+          id: j,
+          timestamp: Date.now(),
+          data: 'x'.repeat(objectSize - 100) // Fill with data to reach target size
+        };
+        batch.push(JSON.stringify(obj));
+      }
+
+      const chunk = batch.join(',\n');
+      if (i > 0) {
+        writeStream.write(',\n');
+      }
+      writeStream.write(chunk);
+
+      // Log progress every 10%
+      if (i % (numObjects / 10) === 0) {
+        const progress = (i / numObjects) * 100;
+        console.log(`Generating ${filePath}: ${progress.toFixed(1)}% complete`);
+      }
+    }
+
+    // Write closing bracket
+    writeStream.write('\n]');
+    writeStream.end();
+
+    return new Promise((resolve, reject) => {
+      writeStream.on('finish', () => {
+        console.log(`Generated ${filePath} (${sizeInMB} MB)`);
+        resolve(true);
+      });
+      writeStream.on('error', reject);
+    });
+  } catch (error) {
+    console.error(`Error checking/generating test file ${filePath}:`, error);
+    return false;
   }
 }
 
@@ -197,12 +279,6 @@ async function runTests(options = { cleanup: false }) {
     } else {
       console.log(`Generating ${fileName}...`);
       await generator();
-      
-      // Wait for file to be fully written and stable
-      console.log(`Waiting for ${fileName} to be ready...`);
-      if (!await waitForFile(filePath)) {
-        throw new Error(`Timeout waiting for ${fileName} to be generated`);
-      }
       console.log(`${fileName} is ready!`);
     }
   }
@@ -218,11 +294,13 @@ async function runTests(options = { cleanup: false }) {
   const outputFile = path.join(testDir, 'merged-output.json');
   console.log('\nMerging files...');
   await mergeJsonFiles(inputFiles, outputFile, {
-    onProgress: (progress, processedBytes, speed) => {
+    onProgress: (progress, processedBytes, speed, bufferInfo) => {
       process.stdout.write(
         `\rProgress: ${progress.toFixed(1)}% ` +
         `(${formatBytes(processedBytes)} processed) ` +
-        `[${speed.toFixed(1)} MB/s]`
+        `[${speed.toFixed(1)} MB/s] ` +
+        `[Buffer: ${formatBytes(bufferInfo.bufferSize)} ` +
+        `(${bufferInfo.bufferGrowth > 0 ? '+' : ''}${bufferInfo.bufferGrowth.toFixed(1)}B/s)]`
       );
     }
   });

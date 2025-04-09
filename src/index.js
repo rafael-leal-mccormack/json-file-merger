@@ -7,51 +7,47 @@ class JsonStreamMerger extends Transform {
   constructor(options = {}) {
     super(options);
     this.isFirstFile = true;
-    this.isFirstObject = true;
-    this.buffer = '';
     this.processedBytes = 0;
     this.totalBytes = 0;
     this.startTime = Date.now();
     this.onProgress = options.onProgress || (() => {});
     this.arrayStartWritten = false;
     this.isInterrupted = false;
+    this.lastChar = '';
+    this.buffer = '';
   }
 
   _transform(chunk, encoding, callback) {
     try {
       this.processedBytes += chunk.length;
-      this.buffer += chunk;
-      const lines = this.buffer.split('\n');
       
-      // Keep the last line in the buffer as it might be incomplete
-      this.buffer = lines.pop() || '';
+      // Write array start only once at the beginning
+      if (!this.arrayStartWritten) {
+        this.push('[\n');
+        this.arrayStartWritten = true;
+      }
 
-      for (const line of lines) {
-        const trimmedLine = line.trim();
-        if (!trimmedLine) continue;
+      // Convert chunk to string and process it
+      const chunkStr = this.buffer + chunk.toString();
+      this.buffer = '';
 
-        try {
-          const data = JSON.parse(trimmedLine);
-          
-          // Write array start only once at the beginning
-          if (!this.arrayStartWritten) {
-            this.push('[\n');
-            this.arrayStartWritten = true;
-          }
+      // Process the chunk line by line
+      const lines = chunkStr.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
 
-          // Write comma and newline before each object (except the first)
-          if (!this.isFirstObject) {
-            this.push(',\n');
-          }
-          this.isFirstObject = false;
+        // Skip array brackets
+        if (line === '[' || line === ']') continue;
 
-          // Write the object
-          this.push(JSON.stringify(data));
-        } catch (e) {
-          // If we can't parse the line, it might be part of a larger JSON object
-          // We'll handle it in the next chunk
-          this.buffer = trimmedLine + '\n' + this.buffer;
+        // Add comma if needed
+        if (this.lastChar === '}' && line.startsWith('{')) {
+          this.push(',\n');
         }
+
+        // Write the line
+        this.push(line + '\n');
+        this.lastChar = line[line.length - 1];
       }
       
       // Report progress with speed
@@ -59,7 +55,10 @@ class JsonStreamMerger extends Transform {
         const progress = (this.processedBytes / this.totalBytes) * 100;
         const elapsed = (Date.now() - this.startTime) / 1000; // seconds
         const speed = this.processedBytes / elapsed / 1024 / 1024; // MB/s
-        this.onProgress(progress, this.processedBytes, speed);
+        this.onProgress(progress, this.processedBytes, speed, {
+          bufferSize: this.buffer.length,
+          bufferGrowth: 0
+        });
       }
       
       callback();
@@ -70,25 +69,25 @@ class JsonStreamMerger extends Transform {
 
   _flush(callback) {
     try {
-      // Process any remaining data in the buffer
+      // Process any remaining buffer
       if (this.buffer) {
-        try {
-          const data = JSON.parse(this.buffer);
-          if (!this.isFirstObject) {
+        const lines = this.buffer.split('\n');
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (!line || line === '[' || line === ']') continue;
+
+          if (this.lastChar === '}' && line.startsWith('{')) {
             this.push(',\n');
           }
-          this.isFirstObject = false;
-          this.push(JSON.stringify(data));
-        } catch (e) {
-          // If we can't parse the remaining buffer, it's invalid JSON
-          callback(new Error('Invalid JSON in the last chunk'));
-          return;
+
+          this.push(line + '\n');
+          this.lastChar = line[line.length - 1];
         }
       }
 
       // Write array end only if not interrupted
       if (this.arrayStartWritten && !this.isInterrupted) {
-        this.push('\n]');
+        this.push(']');
       }
       callback();
     } catch (error) {
@@ -143,10 +142,46 @@ async function mergeJsonFiles(inputFiles, outputFile, options = {}) {
     throw new Error('Input files array must contain at least one file');
   }
 
-  const writeStream = fs.createWriteStream(outputFile);
-  const merger = new JsonStreamMerger({ onProgress: options.onProgress });
+  const writeStream = fs.createWriteStream(outputFile, {
+    highWaterMark: 16 * 1024 * 1024 // 16MB write buffer
+  });
+  const merger = new JsonStreamMerger({ 
+    onProgress: (progress, processedBytes, speed, bufferInfo) => {
+      if (options.onProgress) {
+        options.onProgress(progress, processedBytes, speed, bufferInfo);
+      }
+    }
+  });
 
-  merger.pipe(writeStream);
+  // Create a buffer to store the first and last lines
+  const debugBuffer = {
+    firstLines: [],
+    lastLines: []
+  };
+
+  // Create a transform stream to capture lines for debugging
+  const debugStream = new Transform({
+    transform(chunk, encoding, callback) {
+      const lines = chunk.toString().split('\n');
+      
+      // Store first 5 lines
+      for (const line of lines) {
+        if (debugBuffer.firstLines.length < 5) {
+          debugBuffer.firstLines.push(line);
+        } else {
+          break;
+        }
+      }
+
+      // Store last 5 lines
+      debugBuffer.lastLines = debugBuffer.lastLines.concat(lines).slice(-5);
+      
+      this.push(chunk);
+      callback();
+    }
+  });
+
+  merger.pipe(debugStream).pipe(writeStream);
 
   let totalProcessedBytes = 0;
   let totalBytes = 0;
@@ -156,26 +191,35 @@ async function mergeJsonFiles(inputFiles, outputFile, options = {}) {
     totalBytes += await getFileSize(file);
   }
 
+  // Calculate optimal chunk size based on total file size
+  const optimalChunkSize = Math.min(
+    Math.max(64 * 1024, Math.floor(totalBytes / 1000)), // At least 64KB, at most total/1000
+    1024 * 1024 // Cap at 1MB
+  );
+
   for (const file of inputFiles) {
     const fileSize = await getFileSize(file);
-    merger.totalBytes = fileSize;
-    merger.processedBytes = 0;
-    merger.startTime = Date.now();
+    merger.totalBytes = totalBytes;
+    merger.processedBytes = totalProcessedBytes;
 
     await new Promise((resolve, reject) => {
       const readStream = createReadStream(file, { 
         encoding: 'utf8',
-        highWaterMark: 1024 * 1024 // 1MB chunks
+        highWaterMark: optimalChunkSize
       });
       
       readStream.on('error', reject);
       readStream.on('end', () => {
         totalProcessedBytes += fileSize;
+        merger.isFirstFile = false; // Mark that we've processed at least one file
         if (options.onProgress) {
           const overallProgress = (totalProcessedBytes / totalBytes) * 100;
           const elapsed = (Date.now() - merger.startTime) / 1000;
           const speed = totalProcessedBytes / elapsed / 1024 / 1024;
-          options.onProgress(overallProgress, totalProcessedBytes, speed);
+          options.onProgress(overallProgress, totalProcessedBytes, speed, {
+            bufferSize: merger.buffer.length,
+            bufferGrowth: 0
+          });
         }
         resolve();
       });
@@ -187,7 +231,15 @@ async function mergeJsonFiles(inputFiles, outputFile, options = {}) {
   merger.end();
 
   return new Promise((resolve, reject) => {
-    writeStream.on('finish', resolve);
+    writeStream.on('finish', () => {
+      // Print debugging information
+      console.log('\nDebugging Output:');
+      console.log('First 5 lines:');
+      debugBuffer.firstLines.forEach((line, i) => console.log(`${i + 1}: ${line}`));
+      console.log('\nLast 5 lines:');
+      debugBuffer.lastLines.forEach((line, i) => console.log(`${i + 1}: ${line}`));
+      resolve();
+    });
     writeStream.on('error', reject);
   });
 }
