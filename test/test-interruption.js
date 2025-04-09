@@ -60,8 +60,12 @@ module.exports = async function testInterruption() {
       [testFile],
       outputFile,
       {
-        onProgress: (progress) => {
-          process.stdout.write(`\rProgress: ${progress.toFixed(1)}%`);
+        onProgress: (progressInfo) => {
+          process.stdout.write(
+            `\rProgress: ${progressInfo.progress.toFixed(1)}% ` +
+            `(${(progressInfo.processedBytes / 1024 / 1024).toFixed(1)}MB processed) ` +
+            `[${progressInfo.speed.toFixed(1)} MB/s]`
+          );
         }
       }
     );

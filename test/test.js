@@ -294,16 +294,16 @@ async function runTests(options = { cleanup: false }) {
   const outputFile = path.join(testDir, 'merged-output.json');
   console.log('\nMerging files...');
   await mergeJsonFiles(inputFiles, outputFile, {
-    onProgress: (progress, processedBytes, speed, bufferInfo) => {
+    onProgress: (progressInfo) => {
       process.stdout.write(
-        `\rProgress: ${progress.toFixed(1)}% ` +
-        `(${formatBytes(processedBytes)} processed) ` +
-        `[${speed.toFixed(1)} MB/s] ` +
-        `[Buffer: ${formatBytes(bufferInfo.bufferSize)} ` +
-        `(${bufferInfo.bufferGrowth > 0 ? '+' : ''}${bufferInfo.bufferGrowth.toFixed(1)}B/s)]`
+        `\rProgress: ${progressInfo.progress.toFixed(1)}% ` +
+        `(${formatBytes(progressInfo.processedBytes)} processed) ` +
+        `[${progressInfo.speed.toFixed(1)} MB/s] ` +
+        `[Buffer: ${formatBytes(progressInfo.bufferInfo.bufferSize)}]`
       );
     }
   });
+  process.stdout.write('\n'); // Add newline after progress
 
   // Verify the output
   console.log('\n\nVerifying output...');

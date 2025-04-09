@@ -1,140 +1,15 @@
 const fs = require('fs');
-const { Transform } = require('stream');
 const { createReadStream } = require('fs');
-const readline = require('readline');
-
-class JsonStreamMerger extends Transform {
-  constructor(options = {}) {
-    super(options);
-    this.isFirstFile = true;
-    this.processedBytes = 0;
-    this.totalBytes = 0;
-    this.startTime = Date.now();
-    this.onProgress = options.onProgress || (() => {});
-    this.arrayStartWritten = false;
-    this.isInterrupted = false;
-    this.lastChar = '';
-    this.buffer = '';
-  }
-
-  _transform(chunk, encoding, callback) {
-    try {
-      this.processedBytes += chunk.length;
-      
-      // Write array start only once at the beginning
-      if (!this.arrayStartWritten) {
-        this.push('[\n');
-        this.arrayStartWritten = true;
-      }
-
-      // Convert chunk to string and process it
-      const chunkStr = this.buffer + chunk.toString();
-      this.buffer = '';
-
-      // Process the chunk line by line
-      const lines = chunkStr.split('\n');
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i].trim();
-        if (!line) continue;
-
-        // Skip array brackets
-        if (line === '[' || line === ']') continue;
-
-        // Add comma if needed
-        if (this.lastChar === '}' && line.startsWith('{')) {
-          this.push(',\n');
-        }
-
-        // Write the line
-        this.push(line + '\n');
-        this.lastChar = line[line.length - 1];
-      }
-      
-      // Report progress with speed
-      if (this.totalBytes > 0) {
-        const progress = (this.processedBytes / this.totalBytes) * 100;
-        const elapsed = (Date.now() - this.startTime) / 1000; // seconds
-        const speed = this.processedBytes / elapsed / 1024 / 1024; // MB/s
-        this.onProgress(progress, this.processedBytes, speed, {
-          bufferSize: this.buffer.length,
-          bufferGrowth: 0
-        });
-      }
-      
-      callback();
-    } catch (error) {
-      callback(error);
-    }
-  }
-
-  _flush(callback) {
-    try {
-      // Process any remaining buffer
-      if (this.buffer) {
-        const lines = this.buffer.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i].trim();
-          if (!line || line === '[' || line === ']') continue;
-
-          if (this.lastChar === '}' && line.startsWith('{')) {
-            this.push(',\n');
-          }
-
-          this.push(line + '\n');
-          this.lastChar = line[line.length - 1];
-        }
-      }
-
-      // Write array end only if not interrupted
-      if (this.arrayStartWritten && !this.isInterrupted) {
-        this.push(']');
-      }
-      callback();
-    } catch (error) {
-      callback(error);
-    }
-  }
-
-  // Handle interruption
-  _destroy(err, callback) {
-    this.isInterrupted = true;
-    // Don't write the closing bracket if interrupted
-    callback(err);
-  }
-}
+const { Transform } = require('stream');
+const JsonStreamMerger = require('./streams/json-stream-merger');
+const { getFileSize, formatBytes, calculateOptimalChunkSize } = require('./utils/file-utils');
+const { MergeOptions } = require('./types');
 
 /**
- * Gets the total size of a file in bytes
- * @param {string} filePath - Path to the file
- * @returns {Promise<number>} - Total size of the file in bytes
- */
-async function getFileSize(filePath) {
-  return new Promise((resolve, reject) => {
-    fs.stat(filePath, (err, stats) => {
-      if (err) reject(err);
-      else resolve(stats.size);
-    });
-  });
-}
-
-/**
- * Formats bytes into human readable string
- * @param {number} bytes - Number of bytes
- * @returns {string} Formatted string
- */
-function formatBytes(bytes) {
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  if (bytes === 0) return '0 Bytes';
-  const i = parseInt(Math.floor(Math.log(bytes) / Math.log(1024)));
-  return Math.round(bytes / Math.pow(1024, i), 2) + ' ' + sizes[i];
-}
-
-/**
- * Merges multiple JSON files into a single JSON array using streams
- * @param {string[]} inputFiles - Array of input file paths to merge
+ * Merge multiple JSON files into a single JSON array
+ * @param {string[]} inputFiles - Array of input file paths
  * @param {string} outputFile - Output file path
- * @param {Object} options - Additional options
- * @param {Function} options.onProgress - Callback function to report progress
+ * @param {MergeOptions} options - Merge options
  * @returns {Promise<void>}
  */
 async function mergeJsonFiles(inputFiles, outputFile, options = {}) {
@@ -145,15 +20,16 @@ async function mergeJsonFiles(inputFiles, outputFile, options = {}) {
   const writeStream = fs.createWriteStream(outputFile, {
     highWaterMark: 16 * 1024 * 1024 // 16MB write buffer
   });
+
   const merger = new JsonStreamMerger({ 
-    onProgress: (progress, processedBytes, speed, bufferInfo) => {
+    onProgress: (progressInfo) => {
       if (options.onProgress) {
-        options.onProgress(progress, processedBytes, speed, bufferInfo);
+        options.onProgress(progressInfo);
       }
     }
   });
 
-  // Create a buffer to store the first and last lines
+  // Create a buffer to store the first and last lines for debugging
   const debugBuffer = {
     firstLines: [],
     lastLines: []
@@ -191,11 +67,7 @@ async function mergeJsonFiles(inputFiles, outputFile, options = {}) {
     totalBytes += await getFileSize(file);
   }
 
-  // Calculate optimal chunk size based on total file size
-  const optimalChunkSize = Math.min(
-    Math.max(64 * 1024, Math.floor(totalBytes / 1000)), // At least 64KB, at most total/1000
-    1024 * 1024 // Cap at 1MB
-  );
+  const optimalChunkSize = calculateOptimalChunkSize(totalBytes);
 
   for (const file of inputFiles) {
     const fileSize = await getFileSize(file);
@@ -211,16 +83,7 @@ async function mergeJsonFiles(inputFiles, outputFile, options = {}) {
       readStream.on('error', reject);
       readStream.on('end', () => {
         totalProcessedBytes += fileSize;
-        merger.isFirstFile = false; // Mark that we've processed at least one file
-        if (options.onProgress) {
-          const overallProgress = (totalProcessedBytes / totalBytes) * 100;
-          const elapsed = (Date.now() - merger.startTime) / 1000;
-          const speed = totalProcessedBytes / elapsed / 1024 / 1024;
-          options.onProgress(overallProgress, totalProcessedBytes, speed, {
-            bufferSize: merger.buffer.length,
-            bufferGrowth: 0
-          });
-        }
+        merger.isFirstFile = false;
         resolve();
       });
       
