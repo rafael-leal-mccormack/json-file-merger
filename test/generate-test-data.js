@@ -43,4 +43,9 @@ function writeNext() {
   });
 }
 
-writeNext(); 
+module.exports = function generateTestData() {
+  return new Promise((resolve) => {
+    writeStream.on('finish', resolve);
+    writeNext();
+  });
+}; 

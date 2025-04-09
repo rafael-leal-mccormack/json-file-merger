@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { mergeJsonFiles } = require('../src/index');
 
-async function testInterruption() {
+module.exports = async function testInterruption() {
   const testDir = path.join(__dirname, 'data');
   if (!fs.existsSync(testDir)) {
     fs.mkdirSync(testDir, { recursive: true });
@@ -102,12 +102,10 @@ async function testInterruption() {
       console.log('No output file was created');
     }
   }
-}
+};
 
 // Handle Ctrl+C
 process.on('SIGINT', () => {
   console.log('\nReceived SIGINT, cleaning up...');
   process.exit(0);
-});
-
-testInterruption().catch(console.error); 
+}); 

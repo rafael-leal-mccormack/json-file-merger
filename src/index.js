@@ -11,6 +11,7 @@ class JsonStreamMerger extends Transform {
     this.buffer = '';
     this.processedBytes = 0;
     this.totalBytes = 0;
+    this.startTime = Date.now();
     this.onProgress = options.onProgress || (() => {});
     this.arrayStartWritten = false;
     this.isInterrupted = false;
@@ -53,10 +54,12 @@ class JsonStreamMerger extends Transform {
         }
       }
       
-      // Report progress
+      // Report progress with speed
       if (this.totalBytes > 0) {
         const progress = (this.processedBytes / this.totalBytes) * 100;
-        this.onProgress(progress, this.processedBytes);
+        const elapsed = (Date.now() - this.startTime) / 1000; // seconds
+        const speed = this.processedBytes / elapsed / 1024 / 1024; // MB/s
+        this.onProgress(progress, this.processedBytes, speed);
       }
       
       callback();
@@ -157,6 +160,7 @@ async function mergeJsonFiles(inputFiles, outputFile, options = {}) {
     const fileSize = await getFileSize(file);
     merger.totalBytes = fileSize;
     merger.processedBytes = 0;
+    merger.startTime = Date.now();
 
     await new Promise((resolve, reject) => {
       const readStream = createReadStream(file, { 
@@ -169,7 +173,9 @@ async function mergeJsonFiles(inputFiles, outputFile, options = {}) {
         totalProcessedBytes += fileSize;
         if (options.onProgress) {
           const overallProgress = (totalProcessedBytes / totalBytes) * 100;
-          options.onProgress(overallProgress, totalProcessedBytes);
+          const elapsed = (Date.now() - merger.startTime) / 1000;
+          const speed = totalProcessedBytes / elapsed / 1024 / 1024;
+          options.onProgress(overallProgress, totalProcessedBytes, speed);
         }
         resolve();
       });

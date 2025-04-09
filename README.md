@@ -1,6 +1,6 @@
 # JSON File Merger
 
-A Node.js package for merging large JSON files using streams, designed to handle files that are too large to fit in memory.
+A Node.js package for merging large JSON files using streams, designed to handle files that are too large to fit in memory. The official release of another package I created for my job that never existed in a repository.
 
 ## Features
 
@@ -95,6 +95,28 @@ Merges multiple JSON files into a single JSON array.
 #### Throws
 
 - Error: If input files array is empty or invalid
+
+## Testing
+
+To run the tests, clone the repository and run:
+
+```bash
+node test/test.js
+```
+
+The test suite will:
+- Generate test files of various sizes (including a 2GB file)
+- Test file merging with different file sizes
+- Verify the output file structure and content
+- Test interruption handling
+
+You can also run tests with cleanup of previous test files:
+
+```bash
+node test/test.js --cleanup
+```
+
+This will remove any existing test files before running the tests.
 
 ## License
 
