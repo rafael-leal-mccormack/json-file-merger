@@ -1,0 +1,33 @@
+{
+  "name": "json-file-merger",
+  "version": "0.0.8",
+  "description": "A Node.js package for merging large JSON files using streams",
+  "main": "src/index.js",
+  "bin": {
+    "json-file-merger": "./bin/cli.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "json",
+    "stream",
+    "merge",
+    "files",
+    "large-files"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rafael-leal-mccormack/json-file-merger"
+  },
+  "bugs": {
+    "url": "https://github.com/rafael-leal-mccormack/json-file-merger/issues"
+  },
+  "homepage": "https://github.com/rafael-leal-mccormack/json-file-merger#readme",
+  "dependencies": {
+    "commander": "^11.1.0",
+    "glob": "^10.3.10"
+  }
+}
