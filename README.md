@@ -1,4 +1,4 @@
-# JSON Stream Merger
+# JSON File Merger
 
 A Node.js package for merging large JSON files using streams, designed to handle files that are too large to fit in memory.
 
@@ -15,7 +15,7 @@ A Node.js package for merging large JSON files using streams, designed to handle
 ## Installation
 
 ```bash
-npm install json-stream-merger
+npm install json-file-merger
 ```
 
 ## Usage
@@ -23,7 +23,7 @@ npm install json-stream-merger
 ### As a Node.js Module
 
 ```javascript
-const { mergeJsonFiles } = require('json-stream-merger');
+const { mergeJsonFiles } = require('json-file-merger');
 
 // Example usage
 async function example() {
@@ -45,24 +45,24 @@ After installation, you can use the package from the command line:
 
 ```bash
 # Merge specific files
-json-stream-merger output.json input1.json input2.json input3.json
+json-file-merger output.json input1.json input2.json input3.json
 
 # Merge files using wildcards
-json-stream-merger output.json "data/*.json"
-json-stream-merger output.json "**/*.json"  # Recursive search
-json-stream-merger output.json "data-*.json" # Pattern matching
+json-file-merger output.json "data/*.json"
+json-file-merger output.json "**/*.json"  # Recursive search
+json-file-merger output.json "data-*.json" # Pattern matching
 
 # Merge all JSON files from a directory
-json-stream-merger output.json --directory ./json-files
+json-file-merger output.json --directory ./json-files
 
 # Combine directory and specific files with wildcards
-json-stream-merger output.json --directory ./json-files "additional/*.json"
+json-file-merger output.json --directory ./json-files "additional/*.json"
 
 # Suppress console output
-json-stream-merger -s output.json --directory ./json-files
+json-file-merger -s output.json --directory ./json-files
 
 # Show help
-json-stream-merger --help
+json-file-merger --help
 ```
 
 ## Features

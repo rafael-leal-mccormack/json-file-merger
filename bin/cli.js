@@ -35,15 +35,15 @@ async function main() {
     const args = process.argv.slice(2);
     
     if (args.length < 2) {
-      console.error('Usage: json-stream-merger <output-file> <input-file1> [input-file2 ...]');
-      console.error('       json-stream-merger <output-file> --dir <directory>');
-      console.error('       json-stream-merger <output-file> --dir <directory> --pattern "*.json"');
+      console.error('Usage: json-file-merger <output-file> <input-file1> [input-file2 ...]');
+      console.error('       json-file-merger <output-file> --dir <directory>');
+      console.error('       json-file-merger <output-file> --dir <directory> --pattern "*.json"');
       console.error('\nExamples:');
-      console.error('  json-stream-merger output.json file1.json file2.json');
-      console.error('  json-stream-merger output.json --dir ./data');
-      console.error('  json-stream-merger output.json --dir ./data --pattern "*.json"');
-      console.error('  json-stream-merger output.json "data/*.json"');
-      console.error('  json-stream-merger output.json "**/*.json"');
+      console.error('  json-file-merger output.json file1.json file2.json');
+      console.error('  json-file-merger output.json --dir ./data');
+      console.error('  json-file-merger output.json --dir ./data --pattern "*.json"');
+      console.error('  json-file-merger output.json "data/*.json"');
+      console.error('  json-file-merger output.json "**/*.json"');
       process.exit(1);
     }
 
