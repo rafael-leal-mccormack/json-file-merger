@@ -1,27 +1,30 @@
-const { Transform } = require('stream');
-const { ProgressInfo } = require('../types');
+import { Transform } from 'stream';
+import { ProgressInfo } from '../types';
 
-class JsonStreamMerger extends Transform {
-  constructor(options = {}) {
-    super(options);
-    this.isFirstFile = true;
-    this.processedBytes = 0;
-    this.totalBytes = 0;
+/**
+ * A Transform stream that merges multiple JSON files into a single JSON array
+ */
+export class JsonStreamMerger extends Transform {
+  private isFirstFile: boolean = true;
+  private processedBytes: number = 0;
+  public totalBytes: number = 0;
+  private startTime: number;
+  private onProgress: (info: ProgressInfo) => void;
+  private arrayStartWritten: boolean = false;
+  private isInterrupted: boolean = false;
+  private lastChar: string = '';
+  private buffer: string = '';
+
+  constructor(options: { onProgress?: (info: ProgressInfo) => void } = {}) {
+    super();
     this.startTime = Date.now();
     this.onProgress = options.onProgress || (() => {});
-    this.arrayStartWritten = false;
-    this.isInterrupted = false;
-    this.lastChar = '';
-    this.buffer = '';
   }
 
   /**
    * Process a chunk of data
-   * @param {Buffer} chunk - Data chunk
-   * @param {string} encoding - Encoding type
-   * @param {function} callback - Completion callback
    */
-  _transform(chunk, encoding, callback) {
+  _transform(chunk: Buffer, encoding: string, callback: (error?: Error | null) => void): void {
     try {
       this.processedBytes += chunk.length;
       this._writeArrayStart();
@@ -29,14 +32,14 @@ class JsonStreamMerger extends Transform {
       this._reportProgress();
       callback();
     } catch (error) {
-      callback(error);
+      callback(error instanceof Error ? error : new Error(String(error)));
     }
   }
 
   /**
    * Write the opening array bracket if not already written
    */
-  _writeArrayStart() {
+  private _writeArrayStart(): void {
     if (!this.arrayStartWritten) {
       this.push('[\n');
       this.arrayStartWritten = true;
@@ -45,9 +48,8 @@ class JsonStreamMerger extends Transform {
 
   /**
    * Process a chunk of text data
-   * @param {string} chunkStr - String chunk to process
    */
-  _processChunk(chunkStr) {
+  private _processChunk(chunkStr: string): void {
     const fullChunk = this.buffer + chunkStr;
     this.buffer = '';
 
@@ -63,18 +65,15 @@ class JsonStreamMerger extends Transform {
 
   /**
    * Check if a line should be skipped
-   * @param {string} line - Line to check
-   * @returns {boolean} Whether to skip the line
    */
-  _shouldSkipLine(line) {
+  private _shouldSkipLine(line: string): boolean {
     return line === '[' || line === ']';
   }
 
   /**
    * Write a line with proper formatting
-   * @param {string} line - Line to write
    */
-  _writeLine(line) {
+  private _writeLine(line: string): void {
     if (this.lastChar === '}' && line.startsWith('{')) {
       this.push(',\n');
     }
@@ -85,14 +84,13 @@ class JsonStreamMerger extends Transform {
   /**
    * Report progress information
    */
-  _reportProgress() {
+  private _reportProgress(): void {
     if (this.totalBytes > 0) {
       const progress = (this.processedBytes / this.totalBytes) * 100;
       const elapsed = (Date.now() - this.startTime) / 1000;
       const speed = this.processedBytes / elapsed / 1024 / 1024;
 
-      /** @type {ProgressInfo} */
-      const progressInfo = {
+      const progressInfo: ProgressInfo = {
         progress,
         processedBytes: this.processedBytes,
         speed,
@@ -108,9 +106,8 @@ class JsonStreamMerger extends Transform {
 
   /**
    * Flush any remaining data
-   * @param {function} callback - Completion callback
    */
-  _flush(callback) {
+  _flush(callback: (error?: Error | null) => void): void {
     try {
       if (this.buffer) {
         this._processChunk('');
@@ -120,19 +117,15 @@ class JsonStreamMerger extends Transform {
       }
       callback();
     } catch (error) {
-      callback(error);
+      callback(error instanceof Error ? error : new Error(String(error)));
     }
   }
 
   /**
    * Handle stream destruction
-   * @param {Error} err - Error that caused destruction
-   * @param {function} callback - Completion callback
    */
-  _destroy(err, callback) {
+  _destroy(err: Error | null, callback: (error: Error | null) => void): void {
     this.isInterrupted = true;
     callback(err);
   }
-}
-
-module.exports = JsonStreamMerger; 
+} 

@@ -2,12 +2,21 @@
   "name": "json-file-merger",
   "version": "1.0.4",
   "description": "A Node.js package for merging large JSON files using streams",
-  "main": "src/index.js",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "bin"
+  ],
   "bin": {
     "json-file-merger": "./bin/cli.js"
   },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "build": "tsc",
+    "test": "node test/test.js",
+    "test:interruption": "node test/test-interruption.js",
+    "clean": "rm -rf dist test-files merged-output.json",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "json",
@@ -29,5 +38,9 @@
   "dependencies": {
     "commander": "^11.1.0",
     "glob": "^10.3.10"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.24",
+    "typescript": "^5.3.3"
   }
 }

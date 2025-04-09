@@ -1,0 +1,12 @@
+{
+  "name": "json-file-merger-publish-test",
+  "version": "1.0.0",
+  "description": "Test suite for the published json-file-merger package",
+  "main": "test-publish.js",
+  "scripts": {
+    "test": "node test-publish.js"
+  },
+  "dependencies": {
+    "json-file-merger": "latest"
+  }
+} 

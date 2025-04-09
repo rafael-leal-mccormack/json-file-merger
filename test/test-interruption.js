@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
-const { mergeJsonFiles } = require('../src/index');
+const { mergeJsonFiles, formatBytes } = require('../dist/index');
+const { getJsonFilesFromDirectory } = require('../src/utils/file-utils');
 
 module.exports = async function testInterruption() {
   const testDir = path.join(__dirname, 'data');
@@ -63,8 +64,9 @@ module.exports = async function testInterruption() {
         onProgress: (progressInfo) => {
           process.stdout.write(
             `\rProgress: ${progressInfo.progress.toFixed(1)}% ` +
-            `(${(progressInfo.processedBytes / 1024 / 1024).toFixed(1)}MB processed) ` +
-            `[${progressInfo.speed.toFixed(1)} MB/s]`
+            `(${formatBytes(progressInfo.processedBytes)} processed) ` +
+            `[${progressInfo.speed.toFixed(1)} MB/s] ` +
+            `[Buffer: ${formatBytes(progressInfo.bufferSize)}]`
           );
         }
       }
